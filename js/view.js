@@ -21,7 +21,40 @@ export class View {
         this.dy = 0;
         this.mouse = null;
         this.prevMouse = null;
-        this.pencil = 1;
+        this._pencil = 1;
+        this.mousePosition = null; // Track current mouse position for cursor
+    }
+
+    get pencil() {
+        return this._pencil;
+    }
+
+    set pencil(value) {
+        this._pencil = value;
+        this.frame.updateSelectedColor(value);
+        this.frame.refreshHighlights();
+        this.renderImmediate();
+    }
+
+    renderImmediate() {
+        this.draw();
+
+        this.dx = Math.min(this.dx, this.canvas.width / 2);
+        this.dy = Math.min(this.dy, this.canvas.height / 2);
+        this.dx = Math.max(this.dx, this.canvas.width / 2 - this.frame.canvas.width * this.zoom);
+        this.dy = Math.max(this.dy, this.canvas.height / 2 - this.frame.canvas.height * this.zoom);
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(
+            this.frame.canvas,
+            this.dx,
+            this.dy,
+            this.frame.canvas.width * this.zoom,
+            this.frame.canvas.height * this.zoom,
+        );
+        
+        // Also draw the brush cursor in immediate renders
+        this.drawBrushCursor();
     }
 
     refreshSize() {
@@ -118,6 +151,33 @@ export class View {
             this.frame.canvas.width * this.zoom,
             this.frame.canvas.height * this.zoom,
         );
+
+        // Draw the brush cursor
+        this.drawBrushCursor();
+    }
+
+    // Add a new method to draw the brush cursor
+    drawBrushCursor() {
+        if (!this.mousePosition || !this.frame.image) return;
+        
+        const [x, y] = this.mousePosition;
+        
+        // Calculate the brush size in pixels on screen
+        const radius = Math.max(1, Math.floor(this.frame.brushSize / 2)) * this.frame.pxsize * this.zoom;
+        
+        // Draw a circle representing the brush size
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        
+        // Draw an inner stroke for visibility on light backgrounds
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
     }
 }
 

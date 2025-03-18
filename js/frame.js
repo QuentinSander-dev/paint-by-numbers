@@ -4,6 +4,9 @@ export class Frame {
         this.image = null;
         this.canvas = document.createElement('canvas');
         this.ctx = this.canvas.getContext('2d');
+        this.selectedColor = 1;
+        this.colorState = null;
+        this.brushSize = 1; // Default brush size is 1 (single pixel)
     }
 
     setImage(image) {
@@ -13,21 +16,34 @@ export class Frame {
             this.canvas.height = image.height * this.pxsize;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
+            this.colorState = new Array(image.width * image.height).fill(0);
             this.fill(0);
         }
     }
 
     _setPixel(x, y, color) {
         var i = y * this.image.width + x;
-        this.ctx.fillStyle = this.image.colors[color];
+        
+        this.ctx.fillStyle = this.image.colors[this.colorState[i]];
         this.ctx.fillRect(
             x * this.pxsize,
             y * this.pxsize,
             this.pxsize,
             this.pxsize,
         );
-        if (color !== this.image.data[i]) {
-            this.ctx.fillStyle = this.image.contrasts[color];
+
+        if (this.image.data[i] === this.selectedColor && this.colorState[i] === 0) {
+            this.ctx.fillStyle = 'rgba(128, 128, 128, 0.55)';
+            this.ctx.fillRect(
+                x * this.pxsize,
+                y * this.pxsize,
+                this.pxsize,
+                this.pxsize,
+            );
+        }
+
+        if (this.colorState[i] !== this.image.data[i]) {
+            this.ctx.fillStyle = this.image.contrasts[this.colorState[i]];
             this.ctx.fillText(
                 this.image.data[i],
                 (x + 0.5) * this.pxsize,
@@ -37,45 +53,171 @@ export class Frame {
     }
 
     setPixel(x, y, color) {
-        if (
-            this.image
-            && x >= 0 && x < this.image.width
-            && y >= 0 && y < this.image.height
-        ) {
-            this._setPixel(Math.floor(x), Math.floor(y), color);
+        if (!this.image) return;
+        
+        // Convert to integer coordinates
+        const centerX = Math.floor(x);
+        const centerY = Math.floor(y);
+        
+        // Calculate brush radius - make it at least 0
+        const radius = Math.max(0, Math.floor(this.brushSize / 2));
+        
+        // For each pixel in the brush area
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                // Calculate the actual pixel coordinates
+                const pixelX = centerX + dx;
+                const pixelY = centerY + dy;
+                
+                // Skip pixels outside the image bounds
+                if (pixelX < 0 || pixelX >= this.image.width || 
+                    pixelY < 0 || pixelY >= this.image.height) {
+                    continue;
+                }
+                
+                // Get the index in the data array
+                const i = pixelY * this.image.width + pixelX;
+                
+                // Only color if the number matches the selected color
+                if (this.image.data[i] === color) {
+                    // Update the color state
+                    this.colorState[i] = color;
+                    // Update the display
+                    this._setPixel(pixelX, pixelY, color);
+                }
+            }
+        }
+    }
+
+    updateSelectedColor(color) {
+        this.selectedColor = color;
+        this.refreshHighlights();
+    }
+
+    refreshHighlights() {
+        if (this.image) {
+            for (var y = 0; y < this.image.height; y++) {
+                for (var x = 0; x < this.image.width; x++) {
+                    this._setPixel(x, y, this.colorState[y * this.image.width + x]);
+                }
+            }
         }
     }
 
     fill(color) {
-        for (var y = 0; y < this.image.height; y++) {
-            for (var x = 0; x < this.image.width; x++) {
-                this._setPixel(x, y, color);
+        if (this.image) {
+            for (var y = 0; y < this.image.height; y++) {
+                for (var x = 0; x < this.image.width; x++) {
+                    const i = y * this.image.width + x;
+                    this.colorState[i] = color;
+                    this._setPixel(x, y, color);
+                }
+            }
+        }
+    }
+
+    fillAllMatching(color) {
+        if (this.image) {
+            let changed = false;
+            for (var y = 0; y < this.image.height; y++) {
+                for (var x = 0; x < this.image.width; x++) {
+                    const i = y * this.image.width + x;
+                    if (this.image.data[i] === color && this.colorState[i] === 0) {
+                        this.colorState[i] = color;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) {
+                this.refreshHighlights();
             }
         }
     }
 
     drawLine(x1, y1, x2, y2, color) {
-        var a, x, y;
+        if (!this.image) return;
+        
+        // If points are very close, just call setPixel once
         var dx = Math.abs(x1 - x2);
         var dy = Math.abs(y1 - y2);
-
+        
         if (dx === 0 && dy === 0) {
-            this.setPixel(Math.floor(x1), Math.floor(y1), color);
+            this.setPixel(x1, y1, color);
+            return;
         }
+        
+        // Use more points for larger brushes to avoid gaps
+        const stepSize = 0.5 / Math.max(1, this.brushSize / 2);
+        
+        // Draw line with more points in the longest dimension
         if (dx > dy) {
-            a = (y1 - y2) / (x1 - x2);
-            for (x = Math.floor(Math.min(x1, x2)) + 1; x <= Math.max(x1, x2); x++) {
-                y = a * (x - x2) + y2;
+            // Get slope
+            const slope = (y1 - y2) / (x1 - x2);
+            
+            // Swap if needed to ensure x1 < x2
+            if (x1 > x2) {
+                [x1, x2] = [x2, x1];
+                [y1, y2] = [y2, y1];
+            }
+            
+            // Draw all points along the line with smaller steps for larger brushes
+            for (let x = x1; x <= x2; x += stepSize) {
+                const y = slope * (x - x1) + y1;
                 this.setPixel(x, y, color);
-                this.setPixel(x - 1, y, color);
             }
         } else {
-            a = (x1 - x2) / (y1 - y2);
-            for (y = Math.floor(Math.min(y1, y2)) + 1; y <= Math.max(y1, y2); y++) {
-                x = a * (y - y2) + x2;
+            // Get slope
+            const slope = (x1 - x2) / (y1 - y2);
+            
+            // Swap if needed to ensure y1 < y2
+            if (y1 > y2) {
+                [x1, x2] = [x2, x1];
+                [y1, y2] = [y2, y1];
+            }
+            
+            // Draw all points along the line with smaller steps for larger brushes
+            for (let y = y1; y <= y2; y += stepSize) {
+                const x = slope * (y - y1) + x1;
                 this.setPixel(x, y, color);
-                this.setPixel(x, y - 1, color);
             }
         }
+    }
+
+    fillAll() {
+        if (!this.image) return;
+        
+        console.log("Starting fillAll");
+        
+        // Create a temporary canvas to draw the finished image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.canvas.width;
+        tempCanvas.height = this.canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Draw each cell with its correct color
+        for (let y = 0; y < this.image.height; y++) {
+            for (let x = 0; x < this.image.width; x++) {
+                const i = y * this.image.width + x;
+                const colorIndex = this.image.data[i];
+                
+                // Update color state
+                this.colorState[i] = colorIndex;
+                
+                // Draw the pixel directly
+                tempCtx.fillStyle = this.image.colors[colorIndex];
+                tempCtx.fillRect(
+                    x * this.pxsize,
+                    y * this.pxsize,
+                    this.pxsize,
+                    this.pxsize
+                );
+            }
+        }
+        
+        // Copy the completed image to the main canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(tempCanvas, 0, 0);
+        
+        console.log("Completed fillAll");
     }
 }

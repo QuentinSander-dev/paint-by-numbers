@@ -7,9 +7,14 @@ import { registerPointerEvents } from './pointers.js';
 var loader = document.querySelector('.loader');
 var palette = document.querySelector('.palette');
 var canvas = document.querySelector('canvas');
+var fillButton = document.querySelector('.fill-button');
 
 var frame = new Frame();
 var view = new View(canvas, frame);
+
+// Expose to global scope for direct access
+window.paintByNumbersFrame = frame;
+window.paintByNumbersView = view;
 
 var moveX = new Animation((value, dt) => {
     view.dx += value * dt * 2;
@@ -108,6 +113,14 @@ canvas.addEventListener('wheel', event => {
     view.setZoom(event.offsetX, event.offsetY, view.zoom * Math.pow(2, -event.deltaY / 2000));
 });
 
+// Add mouse tracking even when not clicking
+canvas.addEventListener('mousemove', event => {
+    if (!event.buttons) { // Only track when not clicking/dragging
+        view.mousePosition = [event.offsetX, event.offsetY];
+        view.render();
+    }
+});
+
 registerPointerEvents(canvas, {
     down(pointers) {
         palette.inert = true;
@@ -126,6 +139,7 @@ registerPointerEvents(canvas, {
     move(pointers) {
         if (pointers.length === 1) {
             view.mouse = [event.offsetX, event.offsetY];
+            view.mousePosition = [event.offsetX, event.offsetY];
             view.render();
         } else {
             view.transform(
@@ -147,3 +161,32 @@ registerPointerEvents(canvas, {
         palette.inert = false;
     },
 });
+
+// We'll create a completely separate fill button event handler
+const handleFillButton = function(event) {
+    event.preventDefault();
+    console.log("Fill button clicked - NEW HANDLER");
+    
+    if (frame.image) {
+        console.log("Image is loaded, filling all cells");
+        
+        // Fill the entire image
+        frame.fillAll();
+        
+        // Render immediately
+        view.renderImmediate();
+        
+        console.log("Render complete");
+    } else {
+        console.log("No image loaded");
+    }
+};
+
+// Remove any existing listeners
+fillButton.replaceWith(fillButton.cloneNode(true));
+
+// Get the new button reference
+fillButton = document.querySelector('.fill-button');
+
+// Add the new listener
+fillButton.addEventListener('click', handleFillButton);

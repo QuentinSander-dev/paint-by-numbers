@@ -55,9 +55,15 @@ export var labToRgb = function(lab) {
 };
 
 export var hex = function(rgb) {
-    return '#'
-        + Math.floor(rgb[0] / 16).toString(16)
-        + Math.floor(rgb[1] / 16).toString(16)
-        + Math.floor(rgb[2] / 16).toString(16);
+    // Ensure RGB values are within valid range 0-255
+    const r = Math.max(0, Math.min(255, Math.round(rgb[0])));
+    const g = Math.max(0, Math.min(255, Math.round(rgb[1])));
+    const b = Math.max(0, Math.min(255, Math.round(rgb[2])));
+    
+    // Convert to hex with proper zero padding
+    return '#' + 
+        r.toString(16).padStart(2, '0') +
+        g.toString(16).padStart(2, '0') +
+        b.toString(16).padStart(2, '0');
 };
 

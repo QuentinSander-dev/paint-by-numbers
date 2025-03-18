@@ -13,7 +13,103 @@
 		<button>Load</button>
 	</form>
 	<canvas></canvas>
-	<form class="palette"></form>
+	<div class="controls">
+		<div class="brush-controls">
+			<label>
+				Brush Size: <span id="brush-size-value">1</span>
+				<input type="range" id="brush-size" min="1" max="5" value="1" step="1">
+			</label>
+		</div>
+		<form class="palette"></form>
+		<button class="fill-button" style="display:none">Complete Image</button>
+		<button id="direct-fill" class="fill-button" style="background: #ff5722; font-weight: bold;">COMPLETE IMAGE</button>
+	</div>
 	<script src="js/index.js" type="module"></script>
+	<script>
+		// Direct fill button that bypasses the module system
+		document.getElementById('direct-fill').addEventListener('click', function() {
+			// Access the frame and canvas directly
+			const frame = window.paintByNumbersFrame;
+			const view = window.paintByNumbersView;
+			
+			if (!frame || !frame.image) {
+				console.log("No image loaded");
+				return;
+			}
+			
+			console.log("Starting direct fill operation");
+			
+			try {
+				// Completely direct implementation
+				for (let y = 0; y < frame.image.height; y++) {
+					for (let x = 0; x < frame.image.width; x++) {
+						const i = y * frame.image.width + x;
+						const colorIndex = frame.image.data[i];
+						
+						// Set the color in state
+						frame.colorState[i] = colorIndex;
+						
+						// Draw directly to canvas
+						frame.ctx.fillStyle = frame.image.colors[colorIndex];
+						frame.ctx.fillRect(
+							x * frame.pxsize,
+							y * frame.pxsize,
+							frame.pxsize,
+							frame.pxsize
+						);
+					}
+				}
+				
+				// Force a redraw
+				view.renderImmediate();
+				console.log("Direct fill complete");
+				
+				// Give visual feedback that it worked
+				this.style.background = "#4CAF50";
+				this.textContent = "COMPLETED ✓";
+			} catch (err) {
+				console.error("Error filling image:", err);
+				this.style.background = "#f44336";
+				this.textContent = "ERROR - See console";
+			}
+		});
+		
+		// Brush size control setup
+		const setupBrushControls = function() {
+			const brushSizeSlider = document.getElementById('brush-size');
+			const brushSizeValue = document.getElementById('brush-size-value');
+			
+			if (!brushSizeSlider || !brushSizeValue) {
+				console.error("Brush size controls not found");
+				return;
+			}
+			
+			console.log("Setting up brush size controls");
+			
+			const updateBrushSize = function() {
+				const size = parseInt(brushSizeSlider.value);
+				brushSizeValue.textContent = size;
+				
+				// Update the brush size in the frame object
+				if (window.paintByNumbersFrame) {
+					console.log("Setting brush size to:", size);
+					window.paintByNumbersFrame.brushSize = size;
+				} else {
+					console.warn("Frame object not found on window");
+				}
+			};
+			
+			// Set initial value
+			updateBrushSize();
+			
+			// Update when slider changes
+			brushSizeSlider.addEventListener('input', updateBrushSize);
+		};
+		
+		// Run brush setup when the page loads
+		document.addEventListener('DOMContentLoaded', setupBrushControls);
+		// Also run it now in case DOMContentLoaded already fired
+		setupBrushControls();
+	</script>
 </body>
 </html>
