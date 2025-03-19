@@ -7,6 +7,7 @@ export class Frame {
         this.selectedColor = 1;
         this.colorState = null;
         this.brushSize = 1; // Default brush size is 1 (single pixel)
+        this.progressCallback = null; // Callback for progress updates
     }
 
     setImage(image) {
@@ -55,6 +56,7 @@ export class Frame {
     setPixel(x, y, color) {
         if (!this.image) return;
         
+        let changed = false;
         // Convert to integer coordinates
         const centerX = Math.floor(x);
         const centerY = Math.floor(y);
@@ -80,12 +82,21 @@ export class Frame {
                 
                 // Only color if the number matches the selected color
                 if (this.image.data[i] === color) {
-                    // Update the color state
-                    this.colorState[i] = color;
-                    // Update the display
-                    this._setPixel(pixelX, pixelY, color);
+                    // Only update if the color has changed
+                    if (this.colorState[i] !== color) {
+                        changed = true;
+                        // Update the color state
+                        this.colorState[i] = color;
+                        // Update the display
+                        this._setPixel(pixelX, pixelY, color);
+                    }
                 }
             }
+        }
+        
+        // Notify progress change if needed
+        if (changed) {
+            this.notifyProgress();
         }
     }
 
@@ -218,6 +229,39 @@ export class Frame {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.drawImage(tempCanvas, 0, 0);
         
+        // Notify progress is 100%
+        this.notifyProgress();
+        
         console.log("Completed fillAll");
+    }
+
+    // Add method to get completion percentage
+    getCompletionPercentage() {
+        if (!this.image || !this.colorState) return 0;
+        
+        const totalPixels = this.colorState.length;
+        let correctlyColoredPixels = 0;
+        
+        for (let i = 0; i < totalPixels; i++) {
+            // A pixel is correctly colored if its color matches the target or if it's colored with any non-zero value
+            if (this.colorState[i] !== 0) {
+                correctlyColoredPixels++;
+            }
+        }
+        
+        return (correctlyColoredPixels / totalPixels) * 100;
+    }
+    
+    // Register a progress callback
+    setProgressCallback(callback) {
+        this.progressCallback = callback;
+    }
+    
+    // Notify progress changes
+    notifyProgress() {
+        if (this.progressCallback) {
+            const percentage = this.getCompletionPercentage();
+            this.progressCallback(percentage);
+        }
     }
 }
